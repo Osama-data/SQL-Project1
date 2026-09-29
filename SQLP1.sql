@@ -1,3 +1,8 @@
+-- Portfolio case study based on Danny Ma's Danny's Diner:
+-- https://8weeksqlchallenge.com/case-study-1/
+-- Run in a fresh PostgreSQL schema. Same-day ties are retained.
+-- Membership starts on join_date. First-week multipliers do not stack.
+
 /* Restaurant sales */
 
 CREATE TABLE sales (
@@ -56,29 +61,29 @@ VALUES
 select s.customer_id, sum(price) as "Total sales" from menu as m
 join sales as s on m.product_id = s.product_id
 group by s.customer_id
-order by sum(price) desc
+order by sum(price) desc;
 
 -- 2. How many days has each customer visited the restaurant?
 select customer_id, count(distinct order_date) as noDate from sales
 group by customer_id
-order by noDate desc
+order by noDate desc;
 
 -- 3. What was the first item from the menu purchased by each customer?
 with order_sale as 
 (select customer_id, s.order_date, product_name,
-ROW_NUMBER() over (partition by s.customer_id order by s.order_date) as "rank"
+DENSE_RANK() over (partition by s.customer_id order by s.order_date) as "rank"
 from sales as s
 join menu as m on s.product_id = m.product_id)
 select DISTINCT customer_id, order_date, product_name from order_sale
 where rank = 1
-group by customer_id, product_name, order_date
+group by customer_id, product_name, order_date;
 
 -- 4. What is the most purchased item on the menu and how many times was it purchased by all customers?
 select product_name, count(product_name) as notime from sales as s
 join menu as m on s.product_id = m.product_id
 group by product_name
 order by notime desc
-limit 1
+limit 1;
 
 -- 5. Which item was the most popular for each customer?
 with most_popular as (
@@ -89,31 +94,31 @@ join menu as m on m.product_id = s.product_id
 group by s.customer_id, m.product_name
 )
 select customer_id, product_name, order_count from most_popular
-where "rank" = 1
+where "rank" = 1;
 
 -- 6. Which item was purchased first by the customer after they became a member?
 with join_member as (
 select s.customer_id, s.product_id,
-row_number() over (partition by s.customer_id order by s.order_date) as "rn" from sales as s
+dense_rank() over (partition by s.customer_id order by s.order_date) as "rn" from sales as s
 join members as mb on s.customer_id = mb.customer_id
-and s.order_date > mb.join_date
+and s.order_date >= mb.join_date
 )
 select customer_id, product_name from join_member as jm
 join menu as m on m.product_id = jm.product_id
 where rn = 1
-order by customer_id asc
+order by customer_id asc;
 
 -- 7. Which item was purchased just before the customer became a member?
 with join_member as (
 select s.customer_id, s.product_id, s.order_date,
-row_number() over (partition by s.customer_id order by s.order_date desc) as "rn" from sales as s
+dense_rank() over (partition by s.customer_id order by s.order_date desc) as "rn" from sales as s
 join members as mb on s.customer_id = mb.customer_id
 and s.order_date < mb.join_date
 )
 select customer_id, product_name, order_date from join_member as jm
 join menu as m on m.product_id = jm.product_id
 where rn = 1
-order by customer_id
+order by customer_id;
 
 -- 8. What is the total items and amount spent for each member before they became a member?
 select s.customer_id, count(s.product_id) as "total count", sum(m.price) as "total price" 
@@ -122,7 +127,7 @@ join menu as m on s.product_id = m.product_id
 join members as mb on s.customer_id = mb.customer_id
 where s.order_date < mb.join_date
 group by s.customer_id
-order by s.customer_id
+order by s.customer_id;
 
 /* 9.  If each $1 spent equates to 10 points and sushi has a 2x points multiplier - 
  how many points would each customer have? */
@@ -134,7 +139,7 @@ else price * 10 end as points from menu)
 select customer_id, sum(pc.points) from points_cte as pc
 join sales as s on s.product_id = pc.product_id
 group by customer_id
-order by customer_id
+order by customer_id;
 
 /*10. In the first week after a customer joins the program (including their join date) they earn 2x points 
 on all items, not just sushi - how many points do customer A and B have at the end of January?*/
